@@ -1,0 +1,13 @@
+#!/usr/bin/env node
+
+/*! Copyright (c) 2023 Siemens AG. Licensed under the MIT License. */
+
+// ENSURE THAT THIS FILE HAS UNIX STYLE LINE ENDINGS
+
+// tslint:disable: no-var-requires
+
+// This startup file is used in combination with pkg tool only.
+//
+// dotenv must be configured explicitly, node option -r won't work.
+require("dotenv").config();
+require("../dist/main");

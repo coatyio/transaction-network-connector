@@ -1,0 +1,154 @@
+/*! Copyright (c) 2023 Siemens AG. Licensed under the MIT License. */
+
+/**
+ * Service definition of Coaty Lifecycle Interface provided by TN Connector.
+ */
+
+syntax = "proto3";
+
+package flowpro.tnc.life;
+
+option java_package = "de.flowpro.tnc.life";
+option java_multiple_files = true;
+option java_outer_classname = "TncLifeProto";
+
+/**
+ * Transaction Network Lifecycle Interface over Coaty provided by TN
+ * Connector.
+ *
+ * This gRPC service enables a TN connector to track TNC agents within the
+ * transaction network using Coaty Distributed Lifecycle Management. It allows
+ * you to monitor other agents joining or leaving the transaction network.
+ */
+service LifecycleService {
+
+  /**
+   * Track TNC agents within the transaction network.
+   *
+   * Agents to be tracked are specified by the agent selector. Whenever one of
+   * these agents changes its lifecycle state a corresponding event is emitted.
+   * This event is also emitted initially, i.e. when this method has been
+   * invoked, to yield the latest lifecycle state of agents to be tracked. Note
+   * that the local TNC agent on which this call has been invoked is also
+   * tracked if the specified agent selector applies.
+   *
+   * If the specified agent selector denotes an identity name in the form of a
+   * regular expression that is not in a valid format, a gRPC error with status
+   * code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * tracking observation cannot be set up on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   *
+   * In case Coaty communication is stopped, this server streaming call is ended
+   * explicitly by this service.
+   *
+   * To stop observing events for the given selector, a gRPC client should
+   * cancel this server streaming call or specify a deadline/timeout with this
+   * call from the very start.
+   */
+  rpc TrackAgents(AgentSelector) returns (stream AgentLifecycleEvent);
+}
+
+/**
+ * Tracking selector for AgentLifecycleEvent.
+ *
+ * By specifying an empty agent selector all TNC agents are tracked.
+ */
+message AgentSelector {
+
+  /**
+   * Select either agent identity name or identifier to be tracked.
+   *
+   * If not set or set to an empty string, all TNC agents are tracked.
+   */
+  oneof select {
+
+    /**
+     * The name of the agent identity to be tracked.
+     *
+     * To match an agent name against a given pattern, specify a JavaScript
+     * regular expression string that starts and ends with a forward slash (/).
+     * For example, "/^AGV\d+$/" matches agent names that start with "AGV"
+     * followed by one or more digits.
+     */
+    string identity_name = 1;
+
+    /**
+     * The identifier of the agent identity to be tracked.
+     */
+    string identity_id = 2;
+  }
+}
+
+/**
+ * Emitted whenever a TNC agent changes its lifecycle state.
+ */
+message AgentLifecycleEvent {
+
+  /*
+   * Identifies the agent which changes its lifecycle state (required).
+   */
+  AgentIdentity identity = 1;
+
+  /*
+   * Lifecycle state change of agent (required).
+   */
+  AgentLifecycleState state = 2;
+
+}
+
+/**
+ * Defines the identity of a TNC agent represented by a TN connector.
+ */
+message AgentIdentity {
+
+  /**
+   * The name of the TNC agent (required).
+   */
+  string name = 1;
+
+  /**
+   * The unique identifier of the TNC agent which is immutable during its
+   * lifecycle (required).
+   *
+   * You should use a UUID v4 as identifier to make it globally unique among all
+   * TNC agents within your transaction network. The identifier should
+   * correspond with the field source_id of the Channel, Call, and Return
+   * events submitted by gRPC clients, i.e. TNC components which belong to
+   * this TNC agent.
+   */
+  string id = 2;
+
+  /**
+   * Whether the TNC agent with the given identity represents the local TN
+   * connector to which the calling gRPC client is connected.
+   *
+   * This field is only set in AgentLifecycleEvents that are emitted by the TNC.
+   * If set elsewhere, e.g. in CoatyCommunicationOptions, it is ignored.
+   */
+  bool local = 3;
+}
+
+/**
+ * Defines agent lifecycle states to be announced by AgentLifecycleEvent.
+ */
+enum AgentLifecycleState {
+
+  /**
+   * No state change. This state should never be emitted and can be ignored.
+   */
+  AGENT_LIFECYCLE_STATE_UNSPECIFIED = 0;
+
+  /**
+   * Agent joined the transaction network.
+   */
+  AGENT_LIFECYCLE_STATE_JOIN = 1;
+
+  /**
+   * Agent left the transaction network.
+   */
+  AGENT_LIFECYCLE_STATE_LEAVE = 2;
+}

@@ -1,0 +1,72 @@
+/*! Copyright (c) 2023 Siemens AG. Licensed under the MIT License. */
+
+/**
+ * Message types for testing the gRPC services provided by TN Connector.
+ */
+
+syntax = "proto3";
+
+package flowpro.tnc.test;
+
+/**
+ * Message type for one-way push data on a route.
+ */
+message PushData {
+
+  /** Sequence ID */
+  uint32 seq_id = 1;
+
+  /** Value */
+  int32 value = 2;
+}
+
+/**
+ * Message type for operands of an arithmetic operation (expressed as a route).
+ */
+message ArithmeticOperands {
+
+  /** First integer operand */
+  int32 operand1 = 1;
+
+  /** Second integer operand */
+  int32 operand2 = 2;
+}
+
+/**
+ * Message type for result of an arithmetic operation (expressed as a route).
+ */
+message ArithmeticResult {
+
+  /** Result value as integer */
+  int32 value = 1;
+}
+
+/**
+ * Message type for parameters of a Call-Return test operation.
+ */
+message TestOperationParams {
+
+  /** Number of responses to return per observer */
+  int32 response_count = 1;
+
+  /** Delay between responses in milliseconds */
+  int32 response_delay = 2;
+}
+
+/**
+ * Message type for result of a Call-Return test operation.
+ */
+message TestOperationResult {
+
+  /** Result value returned by observer */
+  int32 value = 1;
+}
+
+/**
+ * Message type for execution info of a Call-Return test operation.
+ */
+message TestOperationExecutionInfo {
+
+  /** Zero-based index of response returned by observer */
+  int32 response_index = 1;
+}

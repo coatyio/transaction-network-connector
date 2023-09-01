@@ -1,0 +1,537 @@
+/*! Copyright (c) 2023 Siemens AG. Licensed under the MIT License. */
+
+/**
+ * Service definition of Coaty communication and configuration interfaces
+ * provided by TN Connector.
+ */
+
+syntax = "proto3";
+
+package flowpro.tnc.coaty;
+
+import "google/protobuf/any.proto";
+import "tnc_life.proto";
+
+option java_package = "de.flowpro.tnc.coaty";
+option java_multiple_files = true;
+option java_outer_classname = "TncCoatyProto";
+
+/**
+ * Transaction Network Communication Interface over Coaty provided by TN
+ * Connector.
+ *
+ * This gRPC service enables one-way and two-way communication between FlowPro
+ * agents using the Coaty Communication Protocol. It provides a gateway to gRPC
+ * clients to act as Coaty agents that can publish and observe a limited subset
+ * of Coaty communication event patterns, namely "Channel" and "Call-Return".
+ *
+ * gRPC clients using this service may pass arbitrary application-specific data
+ * of Protocol Buffers well-known Any type in Coaty events. Coaty objects
+ * (in JSON format) are not directly exposed to gRPC clients as they are
+ * dynamically created by the service.
+ *
+ * Native Coaty agents that want to utilize these Coaty objects must use the
+ * Protobuf definition of the original data to decode the corresponding Any
+ * value encoded as a base64 string in the property `value` of the Coaty object.
+ * The `type_url` of the Any message is passed in the Coaty object's property
+ * `objectType`.
+ */
+service CommunicationService {
+
+  /**
+   * Configure Coaty communication options and receive an acknowledgment after
+   * (re)configuration has completed.
+   *
+   * Communication options should be configured before publishing or observing
+   * Coaty communication events. Whenever this RPC is called the Coaty
+   * communication manager inside the TN Connector is stopped and restarted with
+   * the given options.
+   *
+   * Note that communication options not specified in the call are kept
+   * unchanged, i.e. they keep their latest configured value - if any - or their
+   * default value.
+   */
+  rpc Configure(CoatyCommunicationOptions) returns (EventAck);
+
+  /**
+   * Publish a Channel event on the Coaty network and receive an acknowledgment
+   * after event has been dispatched by this service.
+   *
+   * The published Channel event is multicast to all observers that have
+   * registered interest in the given channel identifier.
+   *
+   * If the specified channel identifier is an empty string or is not in a valid
+   * format, a gRPC error with status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Channel event cannot be published on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   *
+   * Note that a Channel event send by a gRPC client call is also received by
+   * the client itself if it observes the associated Channel selector.
+   *
+   * In case there is no observation of the given Channel ID, the Channel event
+   * is discarded. An acknowledgment is also returned in this case.
+   */
+  rpc PublishChannel(ChannelEvent) returns (EventAck);
+
+  /**
+   * Observe Channel events for the given selector.
+   *
+   * If the specified channel identifier is an empty string or is not in a valid
+   * format, a gRPC error with status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Channel observation cannot be set up on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   *
+   * In case Coaty communication is stopped by a `Configure` call or by other
+   * means, this server streaming call is ended explicitly by this service.
+   *
+   * To stop observing Channel events for the given selector, a gRPC client
+   * should cancel this server streaming call or specify a deadline/timeout with
+   * this call from the very start.
+   */
+  rpc ObserveChannel(ChannelSelector) returns (stream ChannelEvent);
+
+  /**
+   * Publish a Call event on the Coaty network and receive responses as Return
+   * events.
+   *
+   * The published Call event is multicast to all observers that have
+   * registered interest in the given call operation. Each observer can decide
+   * to send back no response at all, a single response, or multiple responses
+   * over time. For example, it may be desirable for some remote operation calls
+   * to have a progressive series of call results, e.g. to return partial data
+   * in chunks or progress status of long running operations, even
+   * simultaneously by different observers.
+   *
+   * If the specified operation name is an empty string or is not in a valid
+   * format, a gRPC error with status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Call event cannot be published on the Coaty network because the connection
+   * is currently not established, a gRPC error with status code `UNAVAILABLE`
+   * (14) is signalled. In this case the operation can be retried with a
+   * backoff.
+   *
+   * In case Coaty communication is stopped by a `Configure` call or by other
+   * means, this server streaming call is ended explicitly by this service.
+   *
+   * Whenever the publishing gRPC client is no longer interested in receiving
+   * Return events it should cancel this server streaming call or specify a
+   * deadline/timeout with this call from the very start.
+   *
+   * Note that multiple response events sent by a single responder client over
+   * time (via `PublishReturn`) are guaranteed to be received by the caller of
+   * this rpc in the original order.
+   *
+   * Note that a Call event send by a gRPC client call is also received by
+   * the client itself if it observes the associated Call selector.
+   *
+   * In case there is no observation of the given Call operation, the Call event
+   * is discarded but the server streaming call remains open. Always ensure this
+   * call is ended sometime by specifying a deadline/timeout with this call from
+   * the very start or by cancelling the call when sufficient responses have
+   * been received.
+   */
+  rpc PublishCall(CallEvent) returns (stream ReturnEvent);
+
+  /**
+   * Observe Call events for the given selector.
+   *
+   * If the specified operation name is an empty string or is not in a valid
+   * format, a gRPC error with status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Call observation cannot be set up on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   *
+   * In case Coaty communication is stopped by a `Configure` call or by other
+   * means, this server streaming call is ended explicitly by this service.
+   *
+   * To stop observing Call events for the given selector, a gRPC client should
+   * cancel this server streaming call or specify a deadline/timeout with this
+   * call from the very start.
+   */
+  rpc ObserveCall(CallSelector) returns (stream CallEvent);
+
+  /**
+   * Publish a Return event in response to an observed Call event and receive an
+   * acknowledgment.
+   *
+   * This method should be called in response to an incoming Call event
+   * observed by method `ObserveCall`. It can be called either one time to
+   * transmit the one - and only one - result of the requested call operation or
+   * multiple times to transmit progressive results, such as progress feedback
+   * of a long running operation. The given Return event must always include the
+   * correlation ID of the corresponding Call event.
+   *
+   * In case the number of responses is known, the last Return event should be
+   * followed by a call to method `PublishComplete` so that the TN communication
+   * service can clean up resources allocated for the correlated Call event.
+   *
+   * If the request can be handled successfully result data must be included in
+   * the Return event. In case result data for an incoming request cannot be
+   * computed, an application-specific error must be included instead.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Return event cannot be published on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   *
+   * Note that this event is discarded silently by the TN Communication service
+   * if the event's correlation ID is not or no longer correlated with a pending
+   * request. For example, if response event is sent after the corresponding
+   * observation call has been cancelled or has ended due to a reconfiguration
+   * call.
+   */
+  rpc PublishReturn(ReturnEvent) returns (EventAck);
+
+  /**
+   * Publish a Complete event in response to an observed request event and
+   * receive an acknowledgment.
+   *
+   * This method should be called in response to an incoming request event
+   * to indicate that no more responses will follow. The given Complete event
+   * must always include the correlation ID of the corresponding request event.
+   *
+   * The purpose of this method is to trigger cleanup of resources allocated by
+   * the TN Communication Service along with the correlated request event.
+   *
+   * Note that this event is discarded silently by the TN Communication service
+   * if the event's correlation ID is not or no longer correlated with a pending
+   * request. For example, if a Complete event is published multiple times for
+   * the same correlation ID.
+   */
+  rpc PublishComplete(CompleteEvent) returns (EventAck);
+}
+
+/**
+ * Acknowledgement event for unary-call methods `Configure`, `PublishChannel`,
+ * `PublishReturn` and `PublishComplete`.
+ */
+message EventAck {
+}
+
+/**
+ * Coaty Communication Options.
+ */
+message CoatyCommunicationOptions {
+
+  /**
+   * Connection URL to MQTT broker (required).
+   *
+   * THe URL must conform to the schema `protocol://host:port`, e.g.
+   * `mqtt://broker.flowpro.de:1883`. Supported protocols include `mqtt`, and
+   * `mqtts` (with TLS enabled).
+   */
+  string broker_url = 1;
+
+  /**
+   * Namespace used to isolate different CM systems running in the same
+   * networking infrastructure with a shared MQTT messaging broker.
+   *
+   * Communication events are only routed between Coaty agents within a
+   * common communication namespace: an agent publishes and observes
+   * communication events with respect to the given namespace.
+   *
+   * If an empty string is specified, a default namespace named `tnc` is
+   * used instead.
+   */
+  string namespace = 2;
+
+  /**
+   * Username-password authentication with MQTT broker.
+   */
+  message UserAuth {
+
+    /**
+     * The username required by your MQTT broker (required).
+     */
+    string username = 1;
+
+    /**
+     * The password required by your MQTT broker (required).
+     */
+    string password = 2;
+  }
+
+  /**
+   * Username-password authentication with MQTT broker (optional).
+   */
+  UserAuth user_auth = 3;
+
+  /**
+   * TLS authentication with MQTT broker.
+   */
+  message TlsAuth {
+
+    /**
+     * Certificate as multiline string in PEM-encoded format (required).
+     */
+    string cert = 1;
+
+    /**
+     * Private key data as multiline string in PEM-encoded format (required).
+     */
+    string key = 2;
+  };
+
+  /**
+   * TLS authentication with MQTT broker (optional).
+   */
+  TlsAuth tls_auth = 4;
+
+  /**
+   * Determines whether the calls PublishChannel, PublishCall, PublishReturn,
+   * ObserveChannel, and ObserveCall should fail fast by signalling a gRPC error
+   * if the Coaty agent is currently offline (optional).
+   *
+   * Set this field to false/true to enable/disable fail fast behavior. By
+   * default, fail fast behavior is enabled in the preconfigured Coaty
+   * communication options.
+   *
+   * If fail fast behavior is disabled the Coaty agent automatically defers
+   * publications and observations and applies them as soon as the Coaty
+   * connection is (re)established.
+   */
+  optional bool not_fail_fast_if_offline = 5;
+
+  /**
+   * Identity of the Coaty agent.
+   *
+   * If not set default values as specified in the .env file are used instead.
+   */
+  AgentIdentity agent_identity = 6;
+}
+
+/**
+ * Observation selector for Channel events.
+ */
+message ChannelSelector {
+
+  /**
+   * The channel identifier to be selected (required).
+   *
+   * The channel ID must be a non-empty string that does not contain the
+   * following characters: NULL (U+0000), # (U+0023), + (U+002B), / (U+002F).
+   */
+  string id = 1;
+}
+
+/**
+ * One-way Channel event pattern.
+ */
+message ChannelEvent {
+
+  /**
+   * ID of the channel (required).
+   *
+   * The channel ID must be a non-empty string that does not contain the
+   * following characters: NULL (U+0000), # (U+0023), + (U+002B), / (U+002F).
+   */
+  string id = 1;
+
+  /**
+   * Application-specific data to be channelized (required).
+   *
+   * Data is represented as Protocol Buffers well-known Any type. Note that in
+   * your gRPC client code, data must be explicitly packed into and unpacked
+   * from this Any type using library-specific pack/unpack functions.
+   */
+  google.protobuf.Any data = 2;
+
+  /**
+   * The unique identifier of the gRPC client, i.e. FlowPro component that sends
+   * this Channel event (optional).
+   *
+   * This identifier can be used by a Channel event observer to distinguish
+   * among Channel events transmitted by different gRPC clients. You should use
+   * a UUID v4 as a source identifier to make it globally unique among all gRPC
+   * clients within your system.
+   *
+   * This field may be set in a Channel event emitted by rpc `publishChannel`.
+   * If set, it is automatically propagated to the corresponding Channel event
+   * observed by rpc `ObserveChannel`.
+   */
+  string source_id = 3;
+}
+
+/**
+ * Observation selector for Call events.
+ */
+message CallSelector {
+
+  /**
+   * The name of the operation to be selected (required).
+   *
+   * The name must be a non-empty string that does not contain the following
+   * characters: NULL (U+0000), # (U+0023), + (U+002B), / (U+002F).
+   */
+  string operation = 1;
+}
+
+/**
+ * Request event for Call-Return event pattern.
+ */
+message CallEvent {
+
+  /**
+   * The name of the operation (required).
+   *
+   * The name must be a non-empty string that does not contain the
+   * following characters: NULL (U+0000), # (U+0023), + (U+002B), / (U+002F).
+   */
+  string operation = 1;
+
+  /**
+   * Operational parameters as Any message type (optional).
+   *
+   * Parameters consisting of attribute-value-pairs are represented as Protocol
+   * Buffers well-known Any type. Note that in your gRPC client code, parameters
+   * must be explicitly packed into and unpacked from this Any type using
+   * library-specific pack/unpack functions.
+   */
+  google.protobuf.Any parameters = 2;
+
+  /**
+   * The unique identifier of the gRPC client, i.e. FlowPro component that sends
+   * this Call event (optional).
+   *
+   * This identifier can be used by a Call event observer to distinguish among
+   * Call events transmitted by different gRPC clients. You should use a UUID v4
+   * as a source identifier to make it globally unique among all gRPC clients
+   * within your system.
+   *
+   * This field may be set in a Call event emitted by rpc `publishCall`. If set,
+   * it is automatically propagated to the corresponding Call event observed by
+   * rpc `ObserveCall`.
+   */
+  string source_id = 3;
+
+  /**
+   * An opaque ID generated by this service to correlate a Return event with a
+   * Call event.
+   *
+   * Each incoming Call event on a specific route is augmented with a unique
+   * correlation ID before being sent to an observer. The observer must include
+   * this field in all associated Return events.
+   *
+   * Note: In a Call event send by method `PublishCall` this field should not
+   * be included as it is ignored by this service.
+   */
+  string correlation_id = 4;
+}
+
+/**
+ * Response event for Call-Return event pattern.
+ */
+message ReturnEvent {
+
+  /**
+   * Return either result data or an error depending on whether the request can
+   * be handled successfully or not.
+   */
+  oneof result {
+
+    /**
+     * Result data to be returned by a successful operation.
+     *
+     * Result data is represented as Protocol Buffers well-known Any type.
+     * Note that in your gRPC client code, data must be explicitly packed into
+     * and unpacked from this Any type using library-specific pack/unpack
+     * functions.
+     */
+    google.protobuf.Any data = 1;
+
+    /**
+     * Error to be returned in case operation fails or is not executable.
+     */
+    ReturnError error = 2;
+  }
+
+  /**
+   * Additional metainformation about the execution environment such as the
+   * execution time of the operation or the ID of the operated control unit
+   * (optional).
+   */
+  google.protobuf.Any execution_info = 3;
+
+  /**
+   * The unique identifier of the gRPC client, i.e. FlowPro component that sends
+   * this Return event (optional).
+   *
+   * This identifier can be used by a caller to distinguish among Return
+   * events transmitted by different gRPC clients. You should use a UUID v4 as a
+   * source identifier to make it globally unique among all gRPC clients within
+   * your system.
+   *
+   * This field should be set in a Return event emitted by rpc `publishCall`.
+   * If set, it is automatically propagated to the corresponding Return event
+   * received by rpc `PublishReturn`.
+   */
+  string source_id = 4;
+
+  /**
+   * An opaque ID generated by this service to correlate a Return event with a
+   * Call event.
+   *
+   * Each incoming Call event is augmented with a unique correlation ID by this
+   * service before being sent to an observer. The observer must include
+   * this field in all associated Return events.
+   *
+   * Note: In a Return event received by the caller via method `PublishCall`
+   * this field is never included.
+   */
+  string correlation_id = 5;
+}
+
+/**
+ * Error returned by Call-Return event pattern in case operation cannot be
+ * handled successfully.
+ */
+message ReturnError {
+
+  /**
+   * Error code that indicates the error type that occurred (required).
+   *
+   * Error code is either a predefined error or an application defined one.
+   * Predefined error codes include -32602 ("invalid params"). Predefined error
+   * codes are within the range -32768 to -32000. Application specific error
+   * codes must be defined outside this range.
+   */
+  int32 code = 1;
+
+  /**
+   * Error message providing a short developer-facing description of the error
+   * (required).
+   */
+  string message = 2;
+}
+
+/**
+ * Final response event for all two-way request-response event patterns.
+ *
+ * This event should be sent by an observer to indicate that no more responses
+ * for a given request will follow.
+ */
+message CompleteEvent {
+
+  /**
+   * An opaque ID generated by this service to correlate a Complete event with a
+   * request event (required).
+   *
+   * Each incoming request event is augmented with a unique correlation ID by
+   * this service before being sent to an observer. The observer must include
+   * this field in an associated Complete event.
+   */
+  string correlation_id = 1;
+}

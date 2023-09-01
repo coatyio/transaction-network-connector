@@ -1,0 +1,406 @@
+/*! Copyright (c) 2023 Siemens AG. Licensed under the MIT License. */
+
+/**
+ * Service definition of Intercomponent Communication Interface provided by TN
+ * Connector.
+ */
+
+syntax = "proto3";
+
+package flowpro.tnc.icc;
+
+import "google/protobuf/any.proto";
+
+option java_package = "de.flowpro.tnc.icc";
+option java_multiple_files = true;
+option java_outer_classname = "TncIccProto";
+
+/**
+ * Routing Interface for Intercomponent Communication provided by TN Connector.
+ *
+ * This gRPC service routes event data send by source gRPC clients to
+ * destination gRPC clients that have registered interest in specific routes and
+ * can also route back response events.
+ *
+ * By providing a generic routing service, different components of a FlowPro
+ * agent can exchange application-specific data using loosely coupled one-way
+ * push (one-to-many) or two-way request-response (one-to-one) routing flows
+ * without the need to know about each other and with a common data model
+ * defined by Protobuf.
+ */
+service RoutingService {
+
+  /**
+   * Register interest in receiving push events on the specified route.
+   *
+   * The Routing service routes a one-way push event to all gRPC client calls
+   * that have registered the corresponding route.
+   *
+   * To deregister this registration, i.e. to stop receiving push events on the
+   * specified route, a gRPC client should cancel this RPC or specify a
+   * deadline/timeout with this RPC from the very start.
+   */
+  rpc RegisterPushRoute(PushRoute) returns (stream PushEvent);
+
+  /**
+   * Register interest in receiving request events on the specified route.
+   *
+   * The Routing service routes a request event to a single gRPC client call
+   * that has registered the corresponding route. Additional registrations may
+   * be accepted depending on the specified routing policy.
+   *
+   * A gRPC error with status code `INVALID_ARGUMENT` (3) is signalled
+   *
+   * - for any additional registration with the default routing policy
+   *   "single registration only",
+   * - for any additional registration with a non-default policy that is
+   *   different from the initial registration policy.
+   *
+   * To deregister this registration, i.e. to stop receiving request events on
+   * the specified route, a gRPC client should cancel this RPC or specify a
+   * deadline/timeout with this RPC from the very start.
+   */
+  rpc RegisterRequestRoute(RequestRoute) returns (stream RequestEvent);
+
+  /**
+   * Send the given push event on the given one-way route to all registered
+   * observers and receive an acknowledgment after event has been dispatched
+   * by the Routing service.
+   *
+   * In the acknowledgement message returned the value of the field
+   * `routing_count` equals the number of observers the event has been routed
+   * to.
+   *
+   * Note that a push event send by a gRPC client call is also routed to the
+   * client itself if it has registered the associated one-way route.
+   *
+   * In case there is no registration on the given one-way route, the push event
+   * is discarded by the Routing service. An appropriate acknowledgment with
+   * `routing_count` set to 0 is also returned in this case.
+   */
+  rpc Push(PushEvent) returns (RouteEventAck);
+
+  /**
+   * Send the given request event on the given two-way route to a single
+   * registered observer and receive a single response event.
+   *
+   * The Routing service dispatches a request event to a single registration
+   * taking into account the specified routing policy of the associated route
+   * and the presence of additional registrations.
+   *
+   * Note that a request event send by a gRPC client may also be routed to the
+   * client itself if it has registered the associated two-way route.
+   *
+   * In case an observer cannot compute result data for a given request event,
+   * e.g. because request data is invalid, an application-specific error is
+   * contained in the response event instead.
+   *
+   * A gRPC error with status code UNAVAILABLE (14) is signalled if no
+   * registration exists for the requested two-way route. An error with
+   * status code CANCELLED (1) is signalled if a given deadline in this RPC is
+   * exceeded or if a correlated registration has been deregistered before a
+   * response is returned for it.
+   */
+  rpc Request(RequestEvent) returns (ResponseEvent);
+
+  /**
+   * Send the given response event back to the Routing service and receive an
+   * acknowledgment.
+   *
+   * This method should be called in response to an incoming request event
+   * observed by method `RegisterRequestRoute`. The given response event must
+   * always include the two-way route and request ID of the correlated request
+   * event.
+   *
+   * If the request can be handled successfully result data must be included in
+   * the response event. In case result data for an incoming request cannot be
+   * computed, an application-specific error must be included instead. For
+   * example, if request data is invalid an error `INVALID_REQUEST_DATA` or the
+   * like must be included.
+   *
+   * In the acknowledgement message returned the value of the field
+   * `routing_count` is 1 if the response event has been routed back to the
+   * requester; otherwise the value is 0 (in case requester call has already
+   * been cancelled or exceeded its deadline before response is supplied).
+   *
+   * Note that a gRPC error with status code `INVALID_ARGUMENT` (3) is signalled
+   * if the given event's route and/or request ID is not correlated with a
+   * pending request. This failure is always caused by a programming error on
+   * the caller's side, either by providing an incorrect route and/or request ID
+   * or by sending a response event after deregistering the associated route. In
+   * such cases, the responding client should fail fast.
+   */
+  rpc Respond(ResponseEvent) returns (RouteEventAck);
+}
+
+/**
+ * Defines a route on which one-way push data is routed.
+ */
+message PushRoute {
+
+  /**
+   * Identifies the one-way route by name (required).
+   *
+   * If not specified the empty string is used as default route.
+   *
+   * To prevent name clashes between routes, you should structure your
+   * application and service specific route identifiers similar to the
+   * dot-separated package specifier format in Protocol Buffers, like
+   * `{app}.{service}.{operation}`.
+   *
+   * It is allowed to use the same route name for both one-way push routing and
+   * two-way request-response routing as both indicate distinct routing flows.
+   */
+  string route = 1;
+}
+
+/**
+ * Defines a route on which two-way request-response data can be exchanged.
+ */
+message RequestRoute {
+
+  /**
+   * Identifies the two-way route by name (required).
+   *
+   * If not specified the empty string is used as default route.
+   *
+   * To prevent name clashes between routes, you should structure your
+   * application and service specific route identifiers similar to the
+   * dot-separated package specifier format in Protocol Buffers, like
+   * `{app}.{service}.{operation}`.
+   *
+   * It is allowed to use the same route name for both one-way push routing and
+   * two-way request-response routing as both indicate distinct routing flows.
+   */
+  string route = 1;
+
+  /**
+   * Routing policy for two-way routing (optional).
+   *
+   * The default policy "single registration only" is used if this field is not
+   * specified.
+   */
+  RoutingPolicy routing_policy = 2;
+}
+
+/**
+ * Message type for event acknowledgements by the Routing service.
+ */
+message RouteEventAck {
+
+  /**
+   * The number of registrations to which the associated event has been routed
+   * by the Routing service (required).
+   *
+   * For push event routing the value of this field equals the number of
+   * observers the event has been routed to.
+   *
+   * For request-response event routing the value of this field is 1 if the
+   * response event has been routed back to the requester; otherwise the value
+   * is 0 (in case requester call has already been cancelled or exceeded its
+   * deadline before response is supplied).
+   */
+  int32 routing_count = 1;
+}
+
+/**
+ * Push event for Routing service.
+ */
+message PushEvent {
+
+  /**
+   * The route identifier this push event is associated with (required).
+   *
+   * Push routes are application-specific. They indicate the origin of data to
+   * be pushed. Use a unique identifier for each push route within your
+   * application.
+   *
+   * To prevent name clashes between routes, you should structure your
+   * application and service specific route identifiers similar to the
+   * dot-separated package specifier format in Protocol Buffers, like
+   * `{app}.{service}.{operation}`.
+   *
+   * If this field is not specified, the empty string is used as default route.
+   */
+  string route = 1;
+
+  /**
+   * Any application-specific push data to be routed on the associated route
+   * (optional).
+   *
+   * Application data is represented as Protocol Buffers well-known Any type.
+   * Note that in your gRPC client code, data must be explicitly packed into and
+   * unpacked from this Any type using language-specific pack/unpack functions.
+   *
+   * This field can be omitted if no additional push data is required because
+   * the given route identifier implicitly specifies the data.
+   */
+  google.protobuf.Any data = 3;
+}
+
+/**
+ * Request event for Routing service.
+ */
+message RequestEvent {
+
+  /**
+   * The route identifier this request event is associated with (required).
+   *
+   * Request routes are application-specific. They indicate the remote operation
+   * to be performed on data. Use a unique identifier for each request-response
+   * route within your application.
+   *
+   * To prevent name clashes between routes, you should structure your
+   * application and service specific route identifiers similar to the
+   * dot-separated package specifier format in Protocol Buffers, like
+   * `{app}.{service}.{operation}`.
+   *
+   * If this field is not specified, the empty string is used as default route.
+   */
+  string route = 1;
+
+  /**
+   * An opaque ID generated by the Routing Service to correlate a response event
+   * with a request event.
+   *
+   * Each incoming request event on a specific route is augmented with a unique
+   * request ID in the range from 1 to 4294967295 by the Routing service before
+   * being routed to an observer. The observer must include this field in the
+   * associated response event.
+   *
+   * Note: In a request event send by method `Request` this field should not be
+   * included as it is ignored by the Routing Service.
+   */
+  uint32 request_id = 2;
+
+  /**
+   * Any application-specific request data to be routed on the associated route
+   * (optional).
+   *
+   * Application data is represented as Protocol Buffers well-known Any type.
+   * Note that in your gRPC client code, data must be explicitly packed into and
+   * unpacked from this Any type using language-specific pack/unpack functions.
+   *
+   * This field can be omitted if no additional request data is required because
+   * the given route identifier completely specifies the request.
+   */
+  google.protobuf.Any data = 3;
+}
+
+/**
+ * Response event for Routing service.
+ */
+message ResponseEvent {
+
+  /**
+   * The route identifier this response event is associated with (required).
+   *
+   * If this field is not specified, the empty string is used as default route.
+   */
+  string route = 1;
+
+  /**
+   * An opaque ID generated by the Routing Service to correlate a response event
+   * with a request event.
+   *
+   * Each incoming request event on a specific route is augmented with a unique
+   * request ID in the range from 1 to 4294967295 by the Routing service before
+   * being routed to an observer. The observer must include this field in the
+   * associated response event.
+   *
+   * Note: In a response event received by the requester via method `Request`
+   * this field is never included.
+   */
+  uint32 request_id = 2;
+
+  /**
+   * Return either result data or an error depending on whether the request can
+   * be handled successfully or not.
+   */
+  oneof result {
+
+    /**
+     * Any application-specific result data to be routed back to the requester.
+     *
+     * Result data is represented as Protocol Buffers well-known Any type. Note
+     * that in your gRPC client code, data must be explicitly packed into and
+     * unpacked from this Any type using language-specific pack/unpack
+     * functions.
+     */
+    google.protobuf.Any data = 3;
+
+    /**
+     * An application-specific developer-facing error identifier to be routed
+     * back to the requester in case result data cannot be computed, e.g.
+     * because request data is invalid.
+     *
+     * This field should indicate the reason of the error, identifying the
+     * proximate cause of the error such as `INVALID_REQUEST_DATA` or
+     * `RESOURCE_NOT_AVAILABLE`.
+     */
+    string error = 4;
+  }
+}
+
+/**
+ * Defines routing policies for two-way request-response routing.
+ *
+ * A routing policy defines how to route a request event for which not only a
+ * single registration but additional ones exist. There are policies for load
+ * balancing requests across multiple registered components as well as policies
+ * to enable hot standby, yielding high availability by redundant registered
+ * components.
+ */
+enum RoutingPolicy {
+
+  /**
+   * Default routing policy for two-way routing.
+   *
+   * For two-way routing, the default policy is to route a request event to a
+   * single registration only. Additional registrations on the default policy
+   * are rejected with a gRPC error.
+   */
+  // protolint:disable:next ENUM_FIELD_NAMES_ZERO_VALUE_END_WITH
+  ROUTING_POLICY_SINGLE = 0;
+
+  /**
+   * Policy for routing a two-way request event to the first registration. This
+   * policy may be used for hot standby routing.
+   *
+   * Additional registrations must also specify this policy to be accepted,
+   * otherwise they are rejected with a gRPC error. When a registered component
+   * is no longer available, it is removed from the list of registrations.
+   */
+  ROUTING_POLICY_FIRST = 1;
+
+  /**
+   * Policy for routing a two-way request event to the last registration. This
+   * policy may be used for hot standby routing.
+   *
+   * Additional registrations must also specify this policy to be accepted,
+   * otherwise they are rejected with a gRPC error. When a registered component
+   * is no longer available, it is removed from the list of registrations.
+   */
+  ROUTING_POLICY_LAST = 2;
+
+  /**
+   * Policy for routing a two-way request event to a registration, one after
+   * the other in a round-robin style. This policy may be used for load-balanced
+   * routing.
+   *
+   * Additional registrations must also specify this policy to be accepted,
+   * otherwise they are rejected with a gRPC error. When a registered component
+   * is no longer available, it is removed from the list of registrations.
+   */
+  ROUTING_POLICY_NEXT = 3;
+
+  /**
+   * Policy for routing a two-way request event to a randomly chosen
+   * registration. This policy may be used for load-balanced routing.
+   *
+   * Additional registrations must also specify this policy to be accepted,
+   * otherwise they are rejected with a gRPC error. When a registered component
+   * is no longer available, it is removed from the list of registrations.
+   */
+  ROUTING_POLICY_RANDOM = 4;
+}

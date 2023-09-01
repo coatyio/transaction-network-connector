@@ -1,0 +1,127 @@
+{
+    "name": "@coaty/tn-connector",
+    "version": "1.0.0",
+    "description": "Transaction Network Connector for FlowPro project in Node.js",
+    "homepage": "https://github.com/coatyio/transaction-network-connector",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/coatyio/transaction-network-connector"
+    },
+    "bugs": {
+        "url": "https://github.com/coatyio/transaction-network-connector/issues"
+    },
+    "readme": "README.md",
+    "bin": "scripts/pkg-start",
+    "pkg": {
+        "scripts": [
+            "dist/**/*.js",
+            "!dist/test/**/*"
+        ],
+        "assets": [
+            "package.json",
+            "dist/proto/**/*",
+            "node_modules/sqlite3/lib/binding/napi-v6-win32-unknown-x64/node_sqlite3.node",
+            "node_modules/sqlite3/lib/binding/napi-v6-linux-musl-x64/node_sqlite3.node",
+            "node_modules/sqlite3/lib/binding/napi-v6-linux-glibc-x64/node_sqlite3.node",
+            "node_modules/sqlite3/lib/binding/napi-v6-darwin-unknown-x64/node_sqlite3.node"
+        ],
+        "targets": [
+            "node12-win-x64",
+            "node12-linux-x64",
+            "node12-macos-x64"
+        ],
+        "outputPath": "dist-binaries"
+    },
+    "scripts": {
+        "broker": "npx coaty-scripts broker --port 1883 --nobonjour",
+        "build": "gulp build",
+        "lint": "gulp lint && npm run lint:proto",
+        "lint:fix": "gulp lint:fix",
+        "lint:proto": "protolint lint -config_dir_path=. src/proto",
+        "deploy": "gulp deploy",
+        "pkg": "node scripts/pkg-addons.js && pkg . --compress GZip",
+        "start": "node -r dotenv/config dist/main.js",
+        "test": "tap",
+        "test:detail": "tap --reporter=tap",
+        "test:debug": "cross-env DEBUG=\"tnc:*\" tap --reporter=tap",
+        "test:coverage": "npm-run-all -s -c _test:cov1 _test:cov2 _test:cov3",
+        "test:coverage:ci": "cross-env FLOWPRO_TNC_INSIDE_TEST_CI=true npm-run-all -s -c _test:cov1 _test:cov2",
+        "_test:cov1": "tap --coverage --check-coverage --branches=50 --functions=75 --lines=75 --statements=75",
+        "_test:cov2": "node dist/test/test-after-coverage.js",
+        "_test:cov3": "opener coverage/lcov-report/index.html",
+        "release": "npm run release:prompt && release-it --verbose",
+        "release:dry": "npm run release:prompt && release-it --dry-run",
+        "release:version": "npm run release:prompt && release-it --verbose --increment",
+        "release:prompt": "node -e \"require('./.release-it.js').promptReleaseNotes()\"",
+        "_release:before": "npm run build"
+    },
+    "keywords": [
+        "transaction",
+        "network",
+        "connector",
+        "FlowPro",
+        "Coaty",
+        "Node.js",
+        "javascript",
+        "typescript",
+        "gRPC"
+    ],
+    "author": "Siemens AG",
+    "license": "MIT",
+    "maintainers": [
+        {
+            "name": "Hubertus Hohl",
+            "email": "hubertus.hohl@siemens.com"
+        },
+        {
+            "name": "Markus Sauer",
+            "email": "markussauer@siemens.com"
+        }
+    ],
+    "peerDependencies": {
+        "protobufjs": "6.x"
+    },
+    "dependencies": {
+        "@coaty/consensus.raft": "^1.0.0",
+        "@coaty/core": "^2.4.1",
+        "@grpc/grpc-js": "^1.9.0",
+        "@grpc/proto-loader": "^0.7.8",
+        "cross-env": "^7.0.3",
+        "debug": "^4.3.4",
+        "dotenv": "^16.3.1",
+        "rxjs": "^6.6.7"
+    },
+    "devDependencies": {
+        "@release-it/conventional-changelog": "^7.0.0",
+        "@types/debug": "^4.1.8",
+        "@types/fs-extra": "^11.0.1",
+        "@types/node": "^20.5.1",
+        "@types/tap": "^15.0.8",
+        "fancy-log": "^2.0.0",
+        "fast-glob": "^3.3.1",
+        "fs-extra": "^11.1.1",
+        "gulp": "^4.0.2",
+        "gulp-chmod": "^3.1.0",
+        "gulp-filter": "^7.0.0",
+        "gulp-json-editor": "^2.5.7",
+        "gulp-tslint": "^8.1.4",
+        "gulp-typescript": "^5.0.1",
+        "gulp-zip": "^5.1.0",
+        "lcov-parse": "^1.0.0",
+        "lcov-total": "^1.0.7",
+        "mqtt": "^4.3.7",
+        "npm-run-all": "^4.1.5",
+        "opener": "^1.5.2",
+        "pkg": "^5.8.1",
+        "readline-sync": "^1.4.10",
+        "release-it": "^16.1.5",
+        "replace-in-file": "^7.0.1",
+        "shelljs": "^0.8.5",
+        "tap": "^16.3.8",
+        "tslint": "^5.20.1",
+        "typescript": "^4.8.4"
+    },
+    "engines": {
+        "node": "^12.22.6 || >=16.15.1"
+    }
+}

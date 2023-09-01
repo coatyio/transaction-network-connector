@@ -1,0 +1,435 @@
+/*! Copyright (c) 2023 Siemens AG. Licensed under the MIT License. */
+
+/**
+ * Service definition of Raft over Coaty Interface provided by TN Connector.
+ */
+
+syntax = "proto3";
+
+package flowpro.tnc.consensus;
+
+// google.protobuf.Value is defined along with google.protobuf.Struct
+import "google/protobuf/struct.proto";
+
+option java_package = "de.flowpro.tnc.consensus";
+option java_multiple_files = true;
+option java_outer_classname = "TncConsensusProto";
+
+/**
+ * Transaction Network Consensus Interface using Raft over Coaty provided by TN
+ * Connector.
+ *
+ * This gRPC service enables a TN connector to share distributed state within
+ * the transaction network using Raft over Coaty consensus algorithm.
+ *
+ * This service maintains a replicated state machine (RSM) shared by all Raft
+ * nodes within a Raft cluster in the Coaty network using the Raft protocol.
+ * Replicated state is represented as a key-value store with key-value pairs
+ * that can be set, changed, or removed. Whereas keys are strings, values can be
+ * any JSON compatible value represented by Protobuf well-known type
+ * `google.protobuf.Value`.
+ *
+ * After creating a new Raft node with `Create` you have to call `Connect`
+ * before it can modify/access the replicated state with the following
+ * methods:
+ *
+ * - `Propose` proposes a new input that should be applied to the RSM.
+ * - `GetState` returns the state of the RSM.
+ * - `ObserveState` emits new state on every RSM change.
+ *
+ * After a Raft node has connected to the Raft cluster it can monitor the
+ * cluster configuration with the following methods:
+ *
+ * - `GetClusterConfiguration` returns the cluster configuration.
+ * - `ObserveClusterConfiguration` emits new configuration on every cluster
+ *    configuration change.
+ *
+ * Use `Disconnect` to disconnect a Raft node from its cluster. Use `Stop` to
+ * temporarily leave the cluster without losing persisted state.
+ *
+ * Note that in order to use this service you have to configure the TNC
+ * Communication service via rpc method `Configure` first.
+ */
+service ConsensusService {
+
+  /**
+   * Create a new Raft node and receive a reference to identify this node in
+   * further service calls.
+   */
+  rpc Create(RaftNodeCreateOptions) returns (RaftNodeRef);
+
+  /**
+   * Connect a Raft node to its Raft cluster and receive an acknowledgement once
+   * the node has successfully connected.
+   *
+   * Users need to wait until the RaftAck event is emitted before they can
+   * propose inputs with method `Propose`, observe the replicated state with
+   * methods `GetState` and `ObserveState`, and monitor the cluster
+   * configuration with methods `GetClusterConfiguration` and
+   * `ObserveClusterConfiguration`.
+   *
+   * If this method is called after a crash and the given Raft node was
+   * connected to the Raft cluster before the crash, persisted data will be
+   * used to restore this controller and reconnect to the Raft cluster.
+   *
+   * A Raft node created with field
+   * `RaftNodeCreateOptions.should_create_cluster` set to `true` will create a
+   * new Raft cluster on initial startup. Trying to connect a Raft node with
+   * this option set to `false` will only acknowledge after a Raft cluster has
+   * been created and a majority of the existing cluster has agreed on letting
+   * this Raft node join.
+   *
+   * If the referenced Raft node is not valid, i.e. if field `id` is missing or
+   * not referencing a Raft node created by method `Create`, a gRPC error with
+   * status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If the referenced Raft node is currently in the process of disconnecting or
+   * stopping, a gRPC error with status code `UNAVAILABLE` (14) is signalled. In
+   * this case the operation can be retried with a backoff.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Connect operation cannot be carried out on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   */
+  rpc Connect(RaftNodeRef) returns (RaftAck);
+
+  /**
+   * Disconnect a Raft node from its cluster and receive an acknowledgement once
+   * the node has successfully disconnected.
+   *
+   * The Raft node is removed from the cluster configuration and persisted state
+   * is removed. The shared state of a Raft cluster is lost after all Raft nodes
+   * of that cluster have disconnected.
+   *
+   * If the referenced Raft node is not valid, i.e. if field `id` is missing or
+   * not referencing a Raft node created by method `Create`, a gRPC error with
+   * status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If the referenced Raft node is currently in the process of connecting or
+   * stopping, a gRPC error with status code `UNAVAILABLE` (14) is signalled.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Disonnect operation cannot be carried out on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   */
+  rpc Disconnect(RaftNodeRef) returns (RaftAck);
+
+  /**
+   * Stop a Raft node WITHOUT disconnecting from its cluster and WITHOUT
+   * deleting the persisted state and receive an acknowledgement once the node
+   * has successfully stopped.
+   *
+   * Users can use this method instead of `Disconnect` if they want to shutdown
+   * a Raft node for some time without losing the current shared state and
+   * cluster configuration. This might be useful if e.g. the entire cluster has
+   * to shutdown for a few days but its state and configuration should be
+   * preserved. `Stop` can also be seen as a graceful crash.
+   *
+   * If at least half of all Raft nodes in the Raft cluster are stopped the
+   * cluster can no longer make any progress til enough stopped controllers
+   * reconnect using `Connect`.
+   *
+   * If the referenced Raft node is not valid, i.e. if field `id` is missing or
+   * not referencing a Raft node created by method `Create`, a gRPC error with
+   * status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If the referenced Raft node is currently in the process of connecting or
+   * disconnecting, a gRPC error with status code `UNAVAILABLE` (14) is
+   * signalled.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Stop operation cannot be carried out on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   */
+  rpc Stop(RaftNodeRef) returns (RaftAck);
+
+  /**
+   * Proposes the given input to Raft. Raft will try to add the input to a log
+   * shared between all Raft nodes in the Raft cluster. If the input is accepted
+   * into the log it counts as committed and is applied to the node's key-value
+   * store. The value received is the resulting state of the key-value store
+   * after the proposed input has been applied if it ever gets applied.
+   *
+   * A majority of Raft nodes need to give their consent before the given input
+   * is accepted into the log. This might take indefinitely if no majority can
+   * be reached, e.g. if too many nodes have crashed and cannot recover. In this
+   * case no return data is ever received.
+   *
+   * Note: This function implements reproposed inputs as explained inside the
+   * Raft thesis. Manual reproposing by the user is not intended. That is why
+   * the gRPC call never times out by the service.
+   *
+   * If the referenced Raft node is not valid, i.e. if field `id` is missing or
+   * not referencing a Raft node created by method `Create`, a gRPC error with
+   * status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If there are more than 1000 input proposals queued up that haven't been
+   * committed yet, a gRPC error with status code `OUT_OF_RANGE` (11) is
+   * signalled.
+   *
+   * If the referenced Raft node is not connected or stopped/disconnected
+   * before it could make sure that the input was committed, a gRPC error with
+   * status code `UNAVAILABLE` (14) is signalled. The input might still be
+   * committed.
+   *
+   * If the referenced Raft node is not connected to the Raft cluster, method
+   * `Connect` needs to be called first.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Propose operation cannot be carried out on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   */
+  rpc Propose(RaftInput) returns (RaftState);
+
+  /**
+   * Returns the state of the replicated key-value store. The state is retrieved
+   * by proposing a NOOP and waiting for its resulting state. The NOOP is being
+   * proposed internally and therefore cannot be observed by `ObserveState`.
+   *
+   * The returned state is guaranteed to be up to date or newer respective to
+   * the point in time when this method was called. In other words calling
+   * `GetState` at time t will return the distributed state from some point in
+   * time inside [t, ∞]. This means that all inputs committed before t are
+   * guaranteed to already be applied in this state. Newer inputs that were
+   * committed after t might also already be applied.
+   *
+   * If the referenced Raft node is not valid, i.e. if field `id` is missing or
+   * not referencing a Raft node created by method `Create`, a gRPC error with
+   * status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If the referenced Raft node is not connected or stopped/disconnected from
+   * the cluster before the state could be retrieved, a gRPC error with status
+   * code `UNAVAILABLE` (14) is signalled.
+   *
+   * If the referenced Raft node is not connected to the Raft cluster, method
+   * `Connect` needs to be called first.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * GetState operation cannot be carried out on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   */
+  rpc GetState(RaftNodeRef) returns (RaftState);
+
+  /**
+   * Emits the state of the replicated key-value store on every state update as
+   * soon as the update becomes known to the referenced Raft node. State updates
+   * are triggered when a new input is committed.
+   *
+   * This server streaming call is automatically ended by this service once the
+   * referenced Raft node is disconnected or stopped, also in case Coaty
+   * communication is stopped by a `Configure` call or by other means.
+   *
+   * If the referenced Raft node is not valid, i.e. if field `id` is missing or
+   * not referencing a Raft node created by method `Create`, a gRPC error with
+   * status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If the referenced Raft node is not connected to the Raft cluster, a gRPC
+   * error with status code `UNAVAILABLE` (14) is signalled. In this case,
+   * method `Connect` needs to be called first.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * State observation cannot be set up on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   */
+  rpc ObserveState(RaftNodeRef) returns (stream RaftState);
+
+  /**
+   * Returns the current cluster configuration containing the ids of all Raft
+   * nodes in the cluster.
+   *
+   * The returned configuration is guaranteed to be up to date or newer
+   * respective to the point in time when this function was called. In other
+   * words calling `GetClusterConfiguration` at time t will return the cluster
+   * configuration from some point in time inside [t, ∞]. This means that all
+   * connects and disconnects that finished before t are guaranteed to already
+   * be applied in this configuration. Newer connects and disconnects that
+   * finished after t might also already be applied.
+   *
+   * If the referenced Raft node is not valid, i.e. if field `id` is missing or
+   * not referencing a Raft node created by method `Create`, a gRPC error with
+   * status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If the referenced Raft node is not connected or stopped/disconnected from
+   * the cluster before the cluster configuration could be retrieved, a gRPC
+   * error with status code `UNAVAILABLE` (14) is signalled.
+   *
+   * If the referenced Raft node is not connected to the Raft cluster, method
+   * `Connect` needs to be called first.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * GetClusterConfiguration operation cannot be carried out on the Coaty
+   * network because the connection is currently not established, a gRPC error
+   * with status code `UNAVAILABLE` (14) is signalled. In this case the
+   * operation can be retried with a backoff.
+   */
+  rpc GetClusterConfiguration(RaftNodeRef) returns (RaftClusterConfiguration);
+
+  /**
+   * Emits the cluster configuration on every cluster configuration change as
+   * soon as the update becomes known to the referenced Raft node. Cluster
+   * configuration changes are triggered when a Raft node connects to or
+   * disconnects from the Raft cluster.
+   *
+   * This server streaming call is automatically ended by this service once the
+   * referenced Raft node is disconnected or stopped, also in case Coaty
+   * communication is stopped by a `Configure` call or by other means.
+   *
+   * If the referenced Raft node is not valid, i.e. if field `id` is missing or
+   * not referencing a Raft node created by method `Create`, a gRPC error with
+   * status code `INVALID_ARGUMENT` (3) is signalled.
+   *
+   * If the referenced Raft node is not connected to the Raft cluster, a gRPC
+   * error with status code `UNAVAILABLE` (14) is signalled. In this case,
+   * method `Connect` needs to be called first.
+   *
+   * If fail fast behavior is enabled in Coaty communication options and the
+   * Cluster observation cannot be set up on the Coaty network because the
+   * connection is currently not established, a gRPC error with status code
+   * `UNAVAILABLE` (14) is signalled. In this case the operation can be retried
+   * with a backoff.
+   */
+  rpc ObserveClusterConfiguration(RaftNodeRef) returns
+      (stream RaftClusterConfiguration);
+}
+
+/**
+ * Defines creation options of a Raft node.
+ */
+message RaftNodeCreateOptions {
+
+  /**
+   * Raft cluster the created Raft node should belong to (optional).
+   *
+   * If this field is not set or set to an empty string, the created Raft node
+   * belongs to the default cluster named "".
+   */
+  string cluster = 1;
+
+  /**
+   * Defines whether or not the Raft node should create a new Raft cluster when
+   * it is first started (optional).
+   *
+   * It is required that exactly one Raft node in a cluster has this field set
+   * to `true` to create the Raft cluster. Multiple Raft nodes having this field
+   * set to `true` will lead to undefined behavior.
+   *
+   * The Raft node that creates the Raft cluster is not required to stay in the
+   * cluster. It is possible to use one designated node for creating the cluster
+   * that disconnects after the cluster is up and running. In this case it is
+   * important that at least one other node has connected before the "creating"
+   * node disconnects.
+   */
+  bool should_create_cluster = 2;
+}
+
+/**
+ * Identifies a Raft node created by method `Create`. Used to reference this
+ * node in further service calls.
+ */
+message RaftNodeRef {
+
+  /**
+   * Reference Id of Raft node to be used in service calls (required).
+   */
+  string id = 1;
+}
+
+/**
+ * Acknowledgement for unary-call methods `Connect`, `Disconnect`, `Stop`.
+ */
+message RaftAck {
+}
+
+/**
+ * Input to be proposed by a Raft node. Input consists of an operation to be
+ * applied to Raft distributed key-value store.
+ */
+message RaftInput {
+
+  /**
+   * The Raft node which proposes this input data (required).
+   */
+  RaftNodeRef ref = 1;
+
+  /**
+   * Operation to be applied on given key (DELETE) or key-value pair (PUT)
+   * (required).
+   */
+  RaftInputOperation op = 2;
+
+  /**
+   * Key on which given operation should be applied (required).
+   *
+   * if this field is not set, the default key "" is used.
+   */
+  string key = 3;
+
+  /**
+   * Value to be set or changed (required for PUT operation only).
+   *
+   * Value is represented as Protocol Buffers well-known Value type. It is a
+   * JSON compatible dynamically typed value which can be either null, a number
+   * (double), a string, a boolean, a recursive struct value, or a list of
+   * values.
+   *
+   * If this field is not specified but required, the value to be set represents
+   * null, i.e. the null_value of google.protobuf.Value type.
+   */
+  google.protobuf.Value value = 4;
+}
+
+/**
+ * Defines input operations for Raft proposals on key-value pairs.
+ */
+enum RaftInputOperation {
+
+  /**
+   * No operation. This operation should never be specified and will be ignored.
+   */
+  RAFT_INPUT_OPERATION_UNSPECIFIED = 0;
+
+  /**
+   * Set or change the value of a key.
+   */
+  RAFT_INPUT_OPERATION_PUT = 1;
+
+  /**
+   * Delete a key-value pair.
+   */
+  RAFT_INPUT_OPERATION_DELETE = 2;
+}
+
+/**
+ * Represents the current state of the replicated key-value store.
+ */
+message RaftState {
+
+  /**
+   * Map with current state of key-value pairs (required).
+   */
+  map<string, google.protobuf.Value> key_value_pairs = 1;
+}
+
+/**
+ * Represents a Raft cluster configuration comprised of the Ids of all Raft
+ * nodes currently member of the cluster.
+ */
+message RaftClusterConfiguration {
+
+  /**
+   * Array of Raft node Ids (required).
+   */
+  repeated string ids = 1;
+}
