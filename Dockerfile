@@ -1,4 +1,4 @@
-# Copyright (c) 2023 Siemens AG.
+# Copyright (c) 2023 Siemens AG. Licensed under the MIT License.
 
 #--------------------------------------------------
 FROM    node:lts-alpine

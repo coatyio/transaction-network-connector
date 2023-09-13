@@ -3,7 +3,7 @@
 [![Powered by Coaty 2](https://img.shields.io/badge/Powered%20by-Coaty%202-FF8C00.svg)](https://coaty.io)
 [![TypeScript](https://img.shields.io/badge/Source%20code-TypeScript-007ACC.svg)](http://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Coverage Report](https://img.shields.io/badge/tests%20%26%20coverage-passed-success.svg)](https://coatyio.github.io/transaction-network-connector/coverage/lcov-report/index.html)
+[![Coverage Report](https://coatyio.github.io/transaction-network-connector/lcov-badge.svg)](https://coatyio.github.io/transaction-network-connector/lcov-report/index.html)
 [![Latest Release](https://img.shields.io/github/v/release/coatyio/transaction-network-connector)](https://github.com/coatyio/transaction-network-connector/releases/latest)
 
 ## Table of Contents
@@ -25,8 +25,7 @@ Spezifikation Gesamtsystem":
 * TN Communication Interface for collaboration between FlowPro agents
 * TN Lifecycle Interface for tracking FlowPro agents within the transaction
   network
-* TN Consensus Interface for maintaining a replicated state machine among
-  FlowPro agents
+* TN Consensus Interface for maintaining replicated state among FlowPro agents
 
 The TN Connector runs across platforms and is deployed as:
 
@@ -40,7 +39,7 @@ The TN Connector comes with complete
 public interfaces and a developer guide that explains how to use it with your
 specific FlowPro agents.
 
-> __NOTE__: This project is delivered "as is" and is no further maintained.
+> __NOTE__: This project is delivered "as is" and is no further developed.
 
 ## Run with Executables
 

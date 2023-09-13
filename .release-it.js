@@ -5,11 +5,9 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const readlineSync = require("readline-sync");
-const replaceInFile = require("replace-in-file");
 
 const releaseNotesFile = path.join(os.tmpdir(), "tn-connector-relnotes.txt");
 const changelogFile = "CHANGELOG.md";
-const readmeFile = "README.md";
 
 /**
  * Invoked by npm run scripts.
@@ -35,22 +33,14 @@ function promptReleaseNotes() {
 }
 
 /**
- * A release-it "before:release" hook function to augment Changelog and Readme
- * files with release information.
- */
-function augmentChangelogAndReadme() {
-    const [version, latestVersion, isCi] = process.argv.slice(1);
-    augmentChangelog(version, latestVersion, isCi);
-    augmentReadme(version, latestVersion, isCi);
-}
-
-/**
+ * A release-it "before:release" hook function.
+ *
  * After generating the conventional changelog file for the current release,
  * insert release notes between the release header and the commit messages.
  * Additionally, ensure the Changelog title is moved/added to the beginning of
  * the file and remove any duplicate version of the new release.
  */
-function augmentChangelog(version, latestVersion, isCi) {
+function augmentChangelog() {
     // Enforce uniform line endings.
     const readLines = file => fs.readFileSync(file, "utf-8").replace(/\r\n/g, "\n").split("\n");
     const findLineIndex = (regexp, allLines, startIndex) => {
@@ -70,6 +60,7 @@ function augmentChangelog(version, latestVersion, isCi) {
     };
     const anyReleaseRegex = /^##? (\S+)|(\[\S+\]\(\S+\)) \(\d\d\d\d-\d\d-\d\d\)$/;
 
+    const [version, latestVersion, isCi] = process.argv.slice(1);
     let relNotes;
 
     // Use the prompted release notes in a non-CI environment. In a CI
@@ -116,17 +107,6 @@ function augmentChangelog(version, latestVersion, isCi) {
     execSync(`git add ${changelogFile}`);
 }
 
-function augmentReadme(version, latestVersion, isCi) {
-    replaceInFile.sync({
-        files: readmeFile,
-        from: [/badges\/v\d+\.\d+\.\d+\/coverage/, /badges\/v\d+\.\d+\.\d+\/pipeline/],
-        to: [`badges/v${version}/coverage`, `badges/v${version}/pipeline`]
-    });
-
-    // Stage the modified file again.
-    execSync(`git add ${readmeFile}`);
-}
-
 module.exports = {
 
     // Invoked by npm run scripts before running release-it to prompt the user
@@ -135,7 +115,7 @@ module.exports = {
 
     // Invoked by release-it in the "before:release" hook to augment the
     // changelog that has been generated.
-    augmentChangelogAndReadme,
+    augmentChangelog,
 
     // release-it options
     "git": {

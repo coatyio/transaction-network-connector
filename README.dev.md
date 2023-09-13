@@ -30,7 +30,8 @@ test run, invoke `npm run release:dry`.
 
 Whenever a version-tagged commit is pushed, a Docker image, a Deployment Bundle,
 and executables of the TN Connector are automatically build by GitHub Actions.
-Deployment bundle and executables are attached to the created GitHub release.
+Deployment bundle and executables are attached to the created GitHub release as
+zipped assets.
 
 The Docker image is pushed to the GitHub Container registry of the `coatyio`
 organization. You can inspect a released image interactively as follows (can't

@@ -41,8 +41,7 @@ Deliverable 3.1 "Baseline Spezifikation Gesamtsystem":
 * TN Communication Interface for collaboration between FlowPro agents
 * TN Lifecycle Interface for tracking FlowPro agents within the transaction
   network
-* TN Consensus Interface for maintaining a replicated state machine among
-  FlowPro agents
+* TN Consensus Interface for maintaining replicated state among FlowPro agents
 
 These interfaces are realized as [gRPC](https://grpc.io/) services which are
 defined using [Protocol Buffers](https://developers.google.com/protocol-buffers)
@@ -1134,15 +1133,16 @@ catch (RpcException ex)
 
 ## TN Consensus Service
 
-The Transaction Network Consensus Service provides an interface for maintaining
-a replicated state machine (RSM) among FlowPro agents using the [Raft Consensus
-Algorithm over Coaty](https://github.com/coatyio/consensus.raft.js).
+The Transaction Network Consensus Service provides data replication as a service
+among FlowPro agents using the [Raft Consensus Algorithm over
+Coaty](https://github.com/coatyio/consensus.raft.js).
 
-This gRPC Consensus service enables a TN connector to share distributed state
-within the transaction network. Replicated state is represented as a key-value
-store with key-value pairs that can be set, changed, or removed. Whereas keys
-are strings, values can be any JSON compatible value represented by Protobuf
-well-known type `google.protobuf.Value`.
+The gRPC Consensus service enables a TN connector to share distributed state
+within the transaction network by using consensus-based data replication.
+Replicated state is represented as a key-value store with key-value pairs that
+can be set, changed, or removed. Whereas keys are strings, values can be any
+JSON compatible value represented by Protobuf well-known type
+`google.protobuf.Value`.
 
 Detailed documentation of the gRPC Consensus service can be found in its
 Protobuf definition file `tnc_consensus.proto`.

@@ -1,0 +1,146 @@
+# Copyright (c) 2023 Siemens AG. Licensed under the MIT License.
+
+name: Create release on pushed version tag
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+  packages: write
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run
+# in-progress and latest queued. However, do NOT cancel in-progress runs as we
+# want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  execs:
+    name: Create executables
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Create and zip
+        run: |
+          npm ci
+          npm run build
+          npm run pkg
+          cp README.md HOWTO.md LICENSE .env dist-binaries
+          cd dist-binaries
+          zip -r tnc-execs.zip .
+      - uses: actions/upload-artifact@v3
+        with:
+          name: tnc-executables
+          path: dist-binaries/tnc-execs.zip
+  bundle:
+    name: Create Deployment Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Bundle
+        run: |
+          npm ci
+          npm run build
+          npm run deploy
+      - uses: actions/upload-artifact@v3
+        with:
+          name: tnc-deployment-bundle
+          path: deploy/tn-connector.zip
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16
+      - name: Coverage
+        run: |
+          npm ci
+          npm run build
+          npm run test:coverage:ci
+          cp docs/* coverage
+      - name: Deploy
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: docs
+          folder: coverage
+  docker:
+    name: Create and push Docker image to GHCR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # On push tag generates two Docker tags v*.*.* and latest
+          images: ghcr.io/coatyio/transaction-network-connector
+          # Use OCI labels to associate the image with the GitHub repository.
+          labels: |
+            org.opencontainers.image.source=https://github.com/coatyio/transaction-network-connector
+            org.opencontainers.image.description=Transaction Network Connector container image
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.vendor=Siemens AG
+            org.opencontainers.image.documentation=https://coatyio.github.io/transaction-network-connector
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+  release:
+    name: Create release
+    needs:
+      - execs
+      - bundle
+      - deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - uses: actions/download-artifact@v3
+        with:
+          name: tnc-deployment-bundle
+      - run: mv tn-connector.zip tnc-deploy.${{ github.ref_name }}.zip
+      - uses: actions/download-artifact@v3
+        with:
+          name: tnc-executables
+      - run: mv tnc-execs.zip tnc-executables.${{ github.ref_name }}.zip
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            README.md
+            HOWTO.md
+            LICENSE
+            .env
+            tnc-deploy.${{ github.ref_name }}.zip
+            tnc-executables.${{ github.ref_name }}.zip
+          body_path: ./CHANGELOG.md
