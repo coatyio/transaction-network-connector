@@ -144,7 +144,7 @@ module.exports = {
         "publish": false,
     },
     "hooks": {
-        "before:release": "node -e \"require('./.release-it.js').augmentChangelogAndReadme()\" \"${version}\" \"${latestVersion}\" \"${ci}\" && npm run _release:before && git add --all :/",
+        "before:release": "node -e \"require('./.release-it.js').augmentChangelog()\" \"${version}\" \"${latestVersion}\" \"${ci}\" && npm run _release:before && git add --all :/",
     },
     "plugins": {
         "@release-it/conventional-changelog": {
