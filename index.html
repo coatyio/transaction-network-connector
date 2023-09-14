@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en-US">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Documentation of Transaction Network Connector</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+
+    <body>
+        <div class="container-lg px-3 my-5 markdown-body">
+
+            <h1>Documentation of Transaction Network Connector</h1>
+
+            <p>This page is the central place for documentation of the public
+                APIs of the Transaction Network Connector (aka TN Connector)
+                according to the FlowPro Deliverable 3.1 "Baseline Spezifikation
+                Gesamtsystem".</p>
+
+            <h2 id="routingService">Routing Service</h2>
+
+            <p>Service definition of Intercomponent Communication Interface provided by TN
+                Connector.</p>
+
+            <ul>
+                <li>
+                    <a href="https://github.com/coatyio/transaction-network-connector/blob/main/src/proto/tnc_icc.proto"
+                        target="_blank">
+                        gRPC service definition with Protobuf messages
+                    </a>
+                </li>
+                <li>
+                    <a href="https://github.com/coatyio/transaction-network-connector/blob/main/HOWTO.md#routing-service"
+                        target="_blank">
+                        Developer guide with programming examples
+                    </a>
+                </li>
+            </ul>
+
+            <h2 id="tnCommunicationService">TN Communication Service</h2>
+
+            <p>Service definition of Transaction Network Communication Interface
+                over Coaty provided by TN Connector.</p>
+
+            <ul>
+                <li>
+                    <a href="https://github.com/coatyio/transaction-network-connector/blob/main/src/proto/tnc_coaty.proto"
+                        target="_blank">
+                        gRPC service definition with Protobuf messages
+                    </a>
+                </li>
+                <li>
+                    <a href="https://github.com/coatyio/transaction-network-connector/blob/main/HOWTO.md#tn-communication-service"
+                        target="_blank">
+                        Developer guide with programming examples
+                    </a>
+                </li>
+            </ul>
+
+            <h2 id="tnLifecycleService">TN Lifecycle Service</h2>
+
+            <p>Service definition of Transaction Network Lifecycle Interface
+                over Coaty provided by TN Connector.</p>
+
+            <ul>
+                <li>
+                    <a href="https://github.com/coatyio/transaction-network-connector/blob/main/src/proto/tnc_life.proto"
+                        target="_blank">
+                        gRPC service definition with Protobuf messages
+                    </a>
+                </li>
+                <li>
+                    <a href="https://github.com/coatyio/transaction-network-connector/blob/main/HOWTO.md#tn-lifecycle-service"
+                        target="_blank">
+                        Developer guide with programming examples
+                    </a>
+                </li>
+            </ul>
+
+            <h2 id="tnLifecycleService">TN Consensus Service</h2>
+
+            <p>Service definition of Transaction Network Consensus Interface
+                using Raft over Coaty provided by TN Connector.</p>
+
+            <ul>
+                <li>
+                    <a href="https://github.com/coatyio/transaction-network-connector/blob/main/src/proto/tnc_consensus.proto"
+                        target="_blank">
+                        gRPC service definition with Protobuf messages
+                    </a>
+                </li>
+                <li>
+                    <a href="https://github.com/coatyio/transaction-network-connector/blob/main/HOWTO.md#tn-consensus-service"
+                        target="_blank">
+                        Developer guide with programming examples
+                    </a>
+                </li>
+            </ul>
+
+            <h2 id="misc">Miscellaneous</h2>
+
+            <p>Additional documentation related to TN Connector.</p>
+
+            <ul>
+                <li>
+                    <a href="https://coatyio.github.io/transaction-network-connector/lcov-report/index.html"
+                        target="_blank">
+                        Test coverage report
+                    </a>
+                </li>
+            </ul>
+
+            <hr />
+            <p><small>Copyright (c) 2023 Siemens AG. Documentation is licensed under a
+                    <a href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons
+                        Attribution-ShareAlike 4.0 International License</a>.
+                </small></p>
+
+        </div>
+
+    </body>
+
+</html>
