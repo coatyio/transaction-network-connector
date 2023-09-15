@@ -80,12 +80,15 @@ Versioned Docker images of the TN Connector are deployed to the GitHub Container
 Start the TN Connector by running its Docker image:
 
 ```sh
-docker run --rm -p 50060:50060 ghcr.io/coatyio/transaction-network-connector:<release-version>
+docker run --rm --env-file .env -p 50060:50060 ghcr.io/coatyio/transaction-network-connector:<release-version>
 ```
 
-To access the configuration settings of the TN Connector and its gRPC service
-definitions you can bind mount the volume `/assets` to an absolute path on your
-host and run the command `assets`:
+You may pass a complete TNC `.env` file or individual TNC specific environment
+variables.
+
+To access the `.env` configuration settings of the TN Connector and its gRPC
+service definitions you can bind mount the volume `/assets` to an absolute path
+on your host and run the command `assets`:
 
 ```sh
 docker run --rm \
