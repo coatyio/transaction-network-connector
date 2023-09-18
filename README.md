@@ -74,8 +74,8 @@ argument `-v`.
 Make sure you have [Docker Engine](https://www.docker.com/) installed on your
 target host system.
 
-Versioned Docker images of the TN Connector are deployed to the GitHub Container
-[registry](https://ghcr.io/coatyio) of the `coatyio` organization.
+Versioned Docker images of the TN Connector are deployed to the [GitHub
+Container Registry](https://github.com/coatyio/transaction-network-connector).
 
 Start the TN Connector by running its Docker image:
 

@@ -33,9 +33,10 @@ and executables of the TN Connector are automatically build by GitHub Actions.
 Deployment bundle and executables are attached to the created GitHub release as
 zipped assets.
 
-The Docker image is pushed to the GitHub Container registry of the `coatyio`
-organization. You can inspect a released image interactively as follows (can't
-use bash shell as it is not part of alpine-linux):
+The Docker image is pushed to the GitHub Container registry of the
+`transaction-network-connector` repo. You can inspect a released image
+interactively as follows (can't use bash shell as it is not part of
+alpine-linux):
 
 ```sh
 docker run -it --rm -p 50060:50060 ghcr.io/coatyio/transaction-network-connector:<release-version> ash 
