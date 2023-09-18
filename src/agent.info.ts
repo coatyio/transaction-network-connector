@@ -13,10 +13,10 @@ import { AgentInfo } from "@coaty/core";
 export const agentInfo: AgentInfo = {
     packageInfo: {
         name: "@coaty/tn-connector",
-        version: "1.0.1",
+        version: "1.0.2",
     },
     buildInfo: {
-        buildDate: "2023-09-15T13:24:10+02:00",
+        buildDate: "2023-09-18T17:03:30+02:00",
         buildMode: "development",
     },
     configInfo: {
